@@ -7,8 +7,9 @@ A lightweight, local AI skeleton built for Windows PC, designed to run fully loc
 Skeleton is a minimal core framework for running local LLMs on Windows. It focuses on:
 - **Fully Local**: No cloud dependencies, all inference happens on your machine
 - **Lightweight**: Minimal dependencies and clean architecture
-- **Windows-First**: Optimized for Windows PC (cross-platform support planned)
+- **Windows-First**: Optimized for Windows PC (cross-platform support planned later)
 - **GGUF Support**: Uses llama-cpp-python for efficient GGUF model inference
+- **Solid Core**: Strict validation, explicit lifecycle management, guaranteed cleanup
 
 ## Project Structure
 
@@ -17,8 +18,8 @@ skeleton/
 ├── __init__.py          # Main package entry point
 ├── core/
 │   ├── __init__.py      # Core module exports
-│   ├── engine.py        # Main inference engine
-│   └── config_loader.py # Configuration management
+│   ├── engine.py        # Main inference engine with resource management
+│   └── config_loader.py # Strict configuration validation
 ├── config/
 │   └── settings.ini     # Configuration file
 ├── models/              # Place your GGUF models here
@@ -58,25 +59,41 @@ skeleton/
 ### Basic Example
 
 ```python
-from skeleton import SkeletonEngine
+from skeleton.core import SkeletonEngine, EngineError
 
 # Initialize engine
 engine = SkeletonEngine()
-engine.initialize()
 
-# Load model
-engine.load_model()
+try:
+    engine.initialize()
+    
+    # Load model
+    engine.load_model()
+    
+    # Chat
+    response = engine.chat("Hello, how are you?")
+    print(response)
+    
+    # Or stream responses
+    for token in engine.generate_stream("Tell me a story"):
+        print(token, end="", flush=True)
+        
+finally:
+    # Always shutdown to release resources
+    engine.shutdown()
+```
 
-# Chat
-response = engine.chat("Hello, how are you?")
-print(response)
+### Using Context Manager (Recommended)
 
-# Or stream responses
-for token in engine.generate_stream("Tell me a story"):
-    print(token, end="", flush=True)
+```python
+from skeleton.core import SkeletonEngine
 
-# Unload when done
-engine.unload_model()
+with SkeletonEngine() as engine:
+    engine.initialize()
+    engine.load_model()
+    response = engine.chat("What is AI?")
+    print(response)
+# Automatically cleans up resources
 ```
 
 ### Configuration
@@ -90,18 +107,63 @@ Edit `config/settings.ini` to customize:
 ## Features
 
 ### Core Engine (`SkeletonEngine`)
-- `initialize()` - Load configuration
+
+**Lifecycle Management:**
+- `initialize()` - Load and validate configuration (raises `EngineError` if invalid)
 - `load_model()` - Load GGUF model into memory
-- `generate(prompt)` - Generate text from prompt
-- `generate_stream(prompt)` - Stream generation token by token
-- `chat(message)` - Chat with proper formatting for Mistral
-- `unload_model()` - Free model from memory
-- `status` - Get current engine status
+- `shutdown()` - Complete cleanup with resource release
+- `unload_model()` - Free model from memory without full shutdown
+
+**Properties:**
+- `is_initialized` - Check if engine is initialized
+- `is_model_loaded` - Check if model is loaded
+- `status` - Get current engine status dict
+
+**Generation:**
+- `generate(prompt, ...)` - Generate text from prompt with optional overrides
+- `generate_stream(prompt, ...)` - Stream generation token by token
+- `chat(message, system_prompt)` - Chat with proper Mistral formatting
+
+All generation methods support runtime overrides for:
+- `max_tokens`
+- `temperature`
+- `top_p`
+- `top_k`
+- `stop_tokens`
 
 ### Configuration (`ConfigLoader`)
-- Load settings from INI file
-- Access to model parameters
-- Platform-specific settings
+
+**Strict Validation:**
+- All required keys must be present
+- Value ranges are validated (e.g., temperature 0.0-2.0, top_p 0.0-1.0)
+- Platform enforcement (Windows only for now)
+- Clear error messages on validation failure
+
+**Properties (require `.load()` first):**
+- `model_path`, `context_size`, `max_tokens`
+- `temperature`, `top_p`, `top_k`
+- `name`, `version`, `platform`
+
+### Error Handling
+
+Two custom exceptions for clear error handling:
+- `ConfigError` - Configuration validation failures
+- `EngineError` - Engine operation failures
+
+```python
+from skeleton.core import SkeletonEngine, EngineError, ConfigError
+
+try:
+    engine = SkeletonEngine()
+    engine.initialize()
+    engine.load_model()
+except ConfigError as e:
+    print(f"Config problem: {e}")
+except EngineError as e:
+    print(f"Engine problem: {e}")
+finally:
+    engine.shutdown()
+```
 
 ## Model Support
 
@@ -126,16 +188,41 @@ Adjust the CUDA version (cu121) based on your installation.
 - Q4_0 quantization: ~4GB RAM for 7B model
 - Recommended: 8GB+ RAM for comfortable usage
 
+### Resource Cleanup
+The engine includes Windows-specific memory cleanup:
+- Explicit `SetProcessWorkingSetSize` calls to release memory
+- Guaranteed cleanup via context manager or explicit `shutdown()`
+- Prevents resource locks that require system restart
+
+## Design Principles
+
+This is a **solid skeleton** - the core foundation before adding features:
+
+1. **Explicit Lifecycle**: No auto-loading, explicit `initialize()` and `shutdown()`
+2. **Strict Validation**: Fail fast with clear errors if config is wrong
+3. **Resource Safety**: Guaranteed cleanup, especially important on Windows
+4. **Type Safety**: Full type hints for IDE support and error prevention
+5. **Windows-Native**: Uses `pathlib.Path` everywhere for proper path handling
+6. **No Magic**: What you see is what you get - no hidden behavior
+
 ## Roadmap
 
-- [x] Core engine implementation
-- [x] Configuration system
-- [x] GGUF model support
+**Core (Current Phase):**
+- [x] Strict configuration validation
+- [x] Explicit lifecycle management
+- [x] Windows-native path handling
+- [x] Guaranteed resource cleanup
+- [x] Type hints throughout
+- [x] Custom exception types
+- [x] Context manager support
+
+**Next (When Core is Stable):**
 - [ ] Conversation history management
-- [ ] Multi-model support
-- [ ] Performance optimizations for Windows
+- [ ] Session management
+- [ ] Logging system
+- [ ] Performance optimizations
 - [ ] Cross-platform support
-- [ ] Plugin/skills system (when core is stable)
+- [ ] Plugin/skills system
 
 ## License
 

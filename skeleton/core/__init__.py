@@ -6,7 +6,7 @@ A lightweight, local AI skeleton for Windows PC
 __version__ = "0.1.0"
 __author__ = "Skeleton Project"
 
-from .engine import SkeletonEngine
-from .config_loader import ConfigLoader
+from .engine import SkeletonEngine, EngineError
+from .config_loader import ConfigLoader, ConfigError
 
-__all__ = ["SkeletonEngine", "ConfigLoader"]
+__all__ = ["SkeletonEngine", "EngineError", "ConfigLoader", "ConfigError"]

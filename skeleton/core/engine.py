@@ -1,11 +1,14 @@
 """
 Core engine for Skeleton AI
-Manages model loading, inference, and conversation handling
+Manages model loading, inference with strict resource management
+Windows-focused implementation
 """
 
 import sys
-from typing import Optional, Generator, Dict, Any
+import gc
+from typing import Optional, Generator, Dict, Any, List
 from pathlib import Path
+import ctypes
 
 # Import llama-cpp-python for GGUF model support
 try:
@@ -15,143 +18,367 @@ except ImportError:
     LLAMA_CPP_AVAILABLE = False
     print("Warning: llama-cpp-python not installed. Install with: pip install llama-cpp-python")
 
-from .config_loader import ConfigLoader
+from .config_loader import ConfigLoader, ConfigError
+
+
+class EngineError(Exception):
+    """Raised when engine operations fail"""
+    pass
 
 
 class SkeletonEngine:
-    """Main engine for Skeleton AI - handles model inference"""
+    """
+    Main engine for Skeleton AI - handles model inference
+    
+    Design principles:
+    - Explicit initialization and shutdown
+    - No automatic model loading
+    - Guaranteed resource cleanup
+    - Windows-native path handling
+    """
     
     def __init__(self, config_path: str = "config/settings.ini"):
-        self.config_loader = ConfigLoader(config_path)
-        self.config: Dict[str, Any] = {}
-        self.model: Optional[Llama] = None
-        self.is_loaded = False
+        """
+        Initialize engine instance
         
+        Args:
+            config_path: Path to configuration file (relative or absolute)
+        """
+        self._config_path = Path(config_path)
+        self._config_loader: Optional[ConfigLoader] = None
+        self._config: Dict[str, Any] = {}
+        self._model: Optional[Llama] = None
+        self._is_initialized = False
+        self._is_model_loaded = False
+        
+        # Windows-specific: Default stop tokens for common models
+        self._default_stop_tokens: List[str] = ["[INST]", "[/INST]", "</s>", "User:", "Human:"]
+    
     def initialize(self) -> bool:
-        """Initialize the engine by loading configuration"""
+        """
+        Initialize the engine by loading and validating configuration
+        
+        Returns:
+            True if initialization successful, False otherwise
+            
+        Raises:
+            EngineError: If configuration validation fails
+        """
         try:
-            self.config = self.config_loader.load()
-            print(f"[{self.config['name']} v{self.config['version']}] Initialized")
+            # Resolve config path relative to project root if not absolute
+            if not self._config_path.is_absolute():
+                # Assume config path is relative to the parent of core directory
+                project_root = Path(__file__).parent.parent
+                self._config_path = project_root / self._config_path
+            
+            self._config_loader = ConfigLoader(str(self._config_path))
+            self._config = self._config_loader.load()
+            
+            self._is_initialized = True
+            print(f"[{self._config['name']} v{self._config['version']}] Initialized successfully")
             return True
+            
+        except FileNotFoundError as e:
+            raise EngineError(f"Configuration file not found: {e}") from e
+        except ConfigError as e:
+            raise EngineError(f"Configuration validation failed: {e}") from e
         except Exception as e:
-            print(f"Error initializing engine: {e}")
-            return False
+            raise EngineError(f"Unexpected error during initialization: {e}") from e
+    
+    @property
+    def is_initialized(self) -> bool:
+        """Check if engine is initialized"""
+        return self._is_initialized
+    
+    @property
+    def is_model_loaded(self) -> bool:
+        """Check if model is loaded"""
+        return self._is_model_loaded
     
     def load_model(self, model_path: Optional[str] = None) -> bool:
-        """Load the GGUF model into memory"""
+        """
+        Load the GGUF model into memory
+        
+        Args:
+            model_path: Optional override for model path from config
+            
+        Returns:
+            True if model loaded successfully, False otherwise
+            
+        Raises:
+            EngineError: If engine not initialized or model loading fails
+        """
+        if not self._is_initialized:
+            raise EngineError("Engine not initialized. Call initialize() first.")
+        
         if not LLAMA_CPP_AVAILABLE:
-            print("Error: llama-cpp-python is not installed")
-            return False
+            raise EngineError("llama-cpp-python is not installed. Install with: pip install llama-cpp-python")
         
-        if not self.config:
-            if not self.initialize():
-                return False
+        if self._is_model_loaded:
+            print("Model already loaded. Unload first if you want to load a different model.")
+            return True
         
-        path = model_path or self.config_loader.model_path
+        # Determine model path
+        path_str = model_path
+        if path_str is None:
+            if self._config_loader is None:
+                raise EngineError("Config loader not available")
+            path_str = self._config_loader.model_path
         
         # Clean path (remove quotes if present from config)
-        path = path.strip('"').strip("'")
+        path_str = path_str.strip('"').strip("'")
         
-        # Resolve path relative to project root
-        model_file = Path(path)
+        # Resolve path using pathlib (Windows-safe)
+        model_file = Path(path_str)
         if not model_file.is_absolute():
-            model_file = Path(__file__).parent.parent / model_file
+            # Resolve relative to project root
+            project_root = Path(__file__).parent.parent
+            model_file = project_root / model_file
+        
+        # Normalize path for Windows
+        model_file = model_file.resolve()
         
         if not model_file.exists():
-            print(f"Error: Model file not found at {model_file}")
-            print("Please download mistral-7b-instruct-v0.2.Q4_0.gguf and place it in the models folder")
-            return False
+            raise EngineError(
+                f"Model file not found at {model_file}\n"
+                f"Please download mistral-7b-instruct-v0.2.Q4_0.gguf and place it in the models folder"
+            )
         
         try:
             print(f"Loading model: {model_file.name}...")
-            self.model = Llama(
+            
+            if self._config_loader is None:
+                raise EngineError("Config loader not available")
+            
+            self._model = Llama(
                 model_path=str(model_file),
-                n_ctx=self.config_loader.context_size,
-                n_threads=None,  # Auto-detect
+                n_ctx=self._config_loader.context_size,
+                n_threads=None,  # Auto-detect optimal threads
                 verbose=False
             )
-            self.is_loaded = True
+            
+            self._is_model_loaded = True
             print("Model loaded successfully!")
             return True
+            
         except Exception as e:
-            print(f"Error loading model: {e}")
-            return False
+            raise EngineError(f"Failed to load model: {e}") from e
     
-    def generate(self, prompt: str, max_tokens: Optional[int] = None) -> str:
-        """Generate a response from the model"""
-        if not self.is_loaded:
-            return "Error: Model not loaded. Call load_model() first."
+    def generate(
+        self, 
+        prompt: str, 
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+        stop_tokens: Optional[List[str]] = None
+    ) -> str:
+        """
+        Generate a response from the model
         
-        tokens = max_tokens or self.config_loader.max_tokens
+        Args:
+            prompt: Input prompt text
+            max_tokens: Override for max tokens to generate
+            temperature: Override for temperature
+            top_p: Override for top_p sampling
+            top_k: Override for top_k sampling
+            stop_tokens: Override for stop tokens
+            
+        Returns:
+            Generated text response
+            
+        Raises:
+            EngineError: If model not loaded or generation fails
+        """
+        if not self._is_model_loaded:
+            raise EngineError("Model not loaded. Call load_model() first.")
+        
+        if self._model is None:
+            raise EngineError("Model instance is None despite is_model_loaded being True")
+        
+        if self._config_loader is None:
+            raise EngineError("Config loader not available")
+        
+        # Use overrides or config values
+        tokens = max_tokens if max_tokens is not None else self._config_loader.max_tokens
+        temp = temperature if temperature is not None else self._config_loader.temperature
+        p_val = top_p if top_p is not None else self._config_loader.top_p
+        k_val = top_k if top_k is not None else self._config_loader.top_k
+        stops = stop_tokens if stop_tokens is not None else self._default_stop_tokens
         
         try:
-            output = self.model(
+            output = self._model(
                 prompt,
                 max_tokens=tokens,
-                temperature=self.config_loader.temperature,
-                top_p=self.config_loader.top_p,
-                top_k=self.config_loader.top_k,
-                stop=["User:", "Human:"],
+                temperature=temp,
+                top_p=p_val,
+                top_k=k_val,
+                stop=stops,
                 echo=False
             )
-            return output['choices'][0]['text'].strip()
+            
+            if output and 'choices' in output and len(output['choices']) > 0:
+                return output['choices'][0]['text'].strip()
+            else:
+                raise EngineError("Model returned empty response")
+                
         except Exception as e:
-            return f"Error during generation: {e}"
+            raise EngineError(f"Generation failed: {e}") from e
     
-    def generate_stream(self, prompt: str, max_tokens: Optional[int] = None) -> Generator[str, None, None]:
-        """Stream generation output token by token"""
-        if not self.is_loaded:
-            yield "Error: Model not loaded."
-            return
+    def generate_stream(
+        self, 
+        prompt: str, 
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+        stop_tokens: Optional[List[str]] = None
+    ) -> Generator[str, None, None]:
+        """
+        Stream generation output token by token
         
-        tokens = max_tokens or self.config_loader.max_tokens
+        Args:
+            prompt: Input prompt text
+            max_tokens: Override for max tokens to generate
+            temperature: Override for temperature
+            top_p: Override for top_p sampling
+            top_k: Override for top_k sampling
+            stop_tokens: Override for stop tokens
+            
+        Yields:
+            Generated tokens one at a time
+            
+        Raises:
+            EngineError: If model not loaded or generation fails
+        """
+        if not self._is_model_loaded:
+            raise EngineError("Model not loaded. Call load_model() first.")
+        
+        if self._model is None:
+            raise EngineError("Model instance is None")
+        
+        if self._config_loader is None:
+            raise EngineError("Config loader not available")
+        
+        # Use overrides or config values
+        tokens = max_tokens if max_tokens is not None else self._config_loader.max_tokens
+        temp = temperature if temperature is not None else self._config_loader.temperature
+        p_val = top_p if top_p is not None else self._config_loader.top_p
+        k_val = top_k if top_k is not None else self._config_loader.top_k
+        stops = stop_tokens if stop_tokens is not None else self._default_stop_tokens
         
         try:
-            stream = self.model(
+            stream = self._model(
                 prompt,
                 max_tokens=tokens,
-                temperature=self.config_loader.temperature,
-                top_p=self.config_loader.top_p,
-                top_k=self.config_loader.top_k,
-                stop=["User:", "Human:"],
+                temperature=temp,
+                top_p=p_val,
+                top_k=k_val,
+                stop=stops,
                 echo=False,
                 stream=True
             )
             
-            for output in stream:
-                token = output['choices'][0]['text']
-                yield token
-                
+            if stream:
+                for output in stream:
+                    if output and 'choices' in output and len(output['choices']) > 0:
+                        token = output['choices'][0]['text']
+                        yield token
+                        
         except Exception as e:
-            yield f"Error: {e}"
+            raise EngineError(f"Streaming generation failed: {e}") from e
     
     def chat(self, message: str, system_prompt: Optional[str] = None) -> str:
-        """Handle a chat message with proper formatting"""
+        """
+        Handle a chat message with proper Mistral formatting
+        
+        Args:
+            message: User message
+            system_prompt: Optional system instruction
+            
+        Returns:
+            Model response
+            
+        Raises:
+            EngineError: If generation fails
+        """
         if system_prompt is None:
             system_prompt = "You are Skeleton, a helpful AI assistant."
         
         # Format for Mistral Instruct model
-        formatted_prompt = (
-            f"<s>[INST] {system_prompt}\n\n{message} [/INST]"
-        )
+        formatted_prompt = f"<s>[INST] {system_prompt}\n\n{message} [/INST]"
         
         return self.generate(formatted_prompt)
     
-    def unload_model(self):
-        """Unload the model from memory"""
-        if self.model:
-            del self.model
-            self.model = None
-            self.is_loaded = False
-            print("Model unloaded")
+    def unload_model(self) -> None:
+        """
+        Unload the model from memory and perform cleanup
+        
+        This is critical for Windows to prevent resource locks
+        """
+        if self._model is not None:
+            try:
+                del self._model
+                self._model = None
+            except Exception:
+                pass  # Best effort cleanup
+        
+        # Force garbage collection to release VRAM
+        gc.collect()
+        
+        # Windows-specific: Try to free any remaining memory
+        if hasattr(ctypes, 'windll') and hasattr(ctypes.windll, 'kernel32'):
+            try:
+                ctypes.windll.kernel32.SetProcessWorkingSetSize(
+                    ctypes.c_void_p(-1),  # Current process
+                    ctypes.c_size_t(0),
+                    ctypes.c_size_t(0)
+                )
+            except Exception:
+                pass  # Non-critical optimization
+        
+        self._is_model_loaded = False
+        print("Model unloaded and resources released")
+    
+    def shutdown(self) -> None:
+        """
+        Perform complete engine shutdown with guaranteed cleanup
+        
+        Always call this before exiting to prevent resource leaks
+        """
+        print("Shutting down Skeleton engine...")
+        
+        # Unload model first
+        self.unload_model()
+        
+        # Clear references
+        self._config = {}
+        self._config_loader = None
+        self._is_initialized = False
+        
+        # Final garbage collection
+        gc.collect()
+        
+        print("Skeleton engine shut down complete")
     
     @property
     def status(self) -> Dict[str, Any]:
         """Get current engine status"""
         return {
-            'initialized': bool(self.config),
-            'model_loaded': self.is_loaded,
-            'model_path': self.config_loader.model_path if self.config else None,
-            'platform': self.config.get('platform', 'unknown') if self.config else None,
-            'version': self.config.get('version', 'unknown') if self.config else None
+            'initialized': self._is_initialized,
+            'model_loaded': self._is_model_loaded,
+            'config_path': str(self._config_path) if self._config_path else None,
+            'model_path': self._config.get('model_path', None),
+            'platform': self._config.get('platform', 'unknown'),
+            'name': self._config.get('name', 'Skeleton'),
+            'version': self._config.get('version', 'unknown')
         }
+    
+    def __enter__(self):
+        """Context manager entry"""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit with guaranteed cleanup"""
+        self.shutdown()
+        return False  # Don't suppress exceptions
