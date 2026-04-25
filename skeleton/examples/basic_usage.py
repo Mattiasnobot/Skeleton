@@ -1,75 +1,58 @@
 """
 Basic usage example for Skeleton AI
-Interactive chat test for the core engine
+Interactive chat loop for testing the core engine.
 """
 
-import sys
-from pathlib import Path
+from skeleton.core.engine import SkeletonEngine, EngineError
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.engine import SkeletonEngine, EngineError
+def run_chat(engine: SkeletonEngine):
+    """Run interactive chat loop."""
+    print(f"\n[{engine.name} v{engine.version}] Ready! Type 'quit' to exit.\n")
+    
+    while True:
+        try:
+            user_input = input("You: ").strip()
+            
+            if user_input.lower() in ('quit', 'exit', 'q'):
+                break
+            
+            if not user_input:
+                continue
+            
+            response = engine.chat(user_input)
+            print(f"{engine.name}: {response}\n")
+            
+        except EngineError as e:
+            print(f"Error: {e}\n")
+        except KeyboardInterrupt:
+            print("\n")
+            break
+        except EOFError:
+            print("\n")
+            break
 
 
 def main():
-    """Interactive chat test for Skeleton engine"""
-
-    # Create engine instance
+    """Main entry point."""
     engine = SkeletonEngine()
-
+    
     try:
-        # Initialize engine (loads config)
-        print("[Skeleton v0.1.0] Initializing...")
-        if not engine.initialize():
-            print("Failed to initialize engine")
-            return
-        
-        print("[Skeleton v0.1.0] Initialized successfully")
+        # Initialize
+        engine.initialize()
         
         # Load model
-        print("\nLoading model...")
-        if not engine.load_model():
-            print("Failed to load model")
-            print("Make sure the model file exists in the models folder")
-            return
-        print("Model loaded successfully!\n")
+        engine.load_model()
         
-        print("=" * 50)
-        print("Interactive Chat Mode")
-        print("Type your message and press Enter")
-        print("Type 'quit', 'exit', or 'q' to stop")
-        print("=" * 50)
-        
-        while True:
-            try:
-                user_input = input("\nYou: ").strip()
-                
-                if user_input.lower() in ['quit', 'exit', 'q']:
-                    print("Exiting chat...")
-                    break
-                
-                if not user_input:
-                    continue
-                
-                response = engine.chat(user_input)
-                print(f"Skeleton: {response}")
-                
-            except EngineError as e:
-                print(f"Error: {e}")
-                break
-            except KeyboardInterrupt:
-                print("\nInterrupted by user")
-                break
+        # Run chat
+        run_chat(engine)
         
     except EngineError as e:
         print(f"Engine Error: {e}")
     except Exception as e:
         print(f"Unexpected Error: {e}")
     finally:
-        print("\nShutting down Skeleton engine...")
         engine.shutdown()
-        print("Skeleton engine shut down complete")
 
 
 if __name__ == "__main__":
