@@ -306,7 +306,8 @@ class SkeletonEngine:
             system_prompt = "You are Skeleton, a helpful AI assistant."
         
         # Format for Mistral Instruct model
-        formatted_prompt = f"<s>[INST] {system_prompt}\n\n{message} [/INST]"
+        # Note: We don't add <s> here as llama-cpp-python adds it automatically
+        formatted_prompt = f"[INST] {system_prompt}\n\n{message} [/INST]"
         
         return self.generate(formatted_prompt)
     
