@@ -1,8 +1,0 @@
-# Requirements for Skeleton AI
-
-# Core dependency for GGUF model support
-llama-cpp-python>=0.2.0
-
-# Optional: For faster inference on Windows with GPU support
-# Uncomment if you have CUDA installed
-# llama-cpp-python>=0.2.0 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
