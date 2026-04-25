@@ -59,3 +59,11 @@ class ConfigLoader:
     @property
     def temperature(self) -> float:
         return self._settings.get('temperature', 0.7)
+    
+    @property
+    def top_p(self) -> float:
+        return self._settings.get('top_p', 0.9)
+    
+    @property
+    def top_k(self) -> int:
+        return self._settings.get('top_k', 40)
