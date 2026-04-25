@@ -5,8 +5,6 @@ Interactive chat loop for testing the core engine.
 
 from core.engine import SkeletonEngine, EngineError
 
-from core.engine import SkeletonEngine, EngineError
-
 
 def run_chat(engine: SkeletonEngine):
     """Run interactive chat loop."""
