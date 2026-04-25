@@ -1,9 +1,46 @@
 ```
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.ENV
+.ENV.*
+.env
+.env.*
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+.MF
+.tags*
+.pytest_cache/
+.hypothesis/
+.coverage*
+.pyup*
+.mypy_cache/
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv.bak/
+venv.bak/
+
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -20,43 +57,47 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Testing
-.coverage
-coverage/
-htmlcov/
-.nosetests
-.unit_test_results.xml
-.pytest_cache/
-.tox/
-
-# Virtual environments
-venv/
-.venv/
-ENV/
-env.bak/
-venv.bak/
-
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
+*~
 
-# OS
+# System
 .DS_Store
 Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Icon?
+iTunes_Control.db
+Thumbs.db
+WindowsThumbnailCache.db
 
 # Logs
 *.log
+*.out
+*.pid
+*.seed
+*.session
+*.dump
+*.core
+*.diff
+*.patch
+*.rej
+*.orig
+*.bak
+*.tmp
+*.temp
 
 # Environment variables
 .env
 .env.local
-*.env.*
-
-# Coverage
-.coverage*
-coverage.xml
+.env.*
+!.env.example
 ```
