@@ -8,5 +8,6 @@ __author__ = "Skeleton Project"
 
 from .engine import SkeletonEngine, EngineError
 from .config_loader import ConfigLoader, ConfigError
+from .exceptions import SkeletonError
 
-__all__ = ["SkeletonEngine", "EngineError", "ConfigLoader", "ConfigError"]
+__all__ = ["SkeletonEngine", "EngineError", "ConfigLoader", "ConfigError", "SkeletonError"]
