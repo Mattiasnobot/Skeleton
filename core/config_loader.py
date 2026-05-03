@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-from exceptions import ConfigError
+from .exceptions import ConfigError
 
 
 class ConfigLoader:
