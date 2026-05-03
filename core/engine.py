@@ -68,6 +68,7 @@ class SkeletonEngine:
         self._is_initialized = False
         self._is_model_loaded = False
         self._memory_manager = memory_manager
+        self._current_task_id: Optional[int] = None  # Track current task for reflection
         
         # Windows-specific: Default stop tokens for common models
         self._default_stop_tokens: List[str] = self.DEFAULT_STOP_TOKENS.copy()
@@ -270,7 +271,8 @@ class SkeletonEngine:
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
         top_k: Optional[int] = None,
-        stop_tokens: Optional[List[str]] = None
+        stop_tokens: Optional[List[str]] = None,
+        store_memory: bool = False
     ) -> str:
         """
         Generate a response from the model.
@@ -282,6 +284,7 @@ class SkeletonEngine:
             top_p: Override for top_p sampling.
             top_k: Override for top_k sampling.
             stop_tokens: Override for stop tokens.
+            store_memory: Whether to store this generation in memory (default: False).
             
         Returns:
             Generated text response.
@@ -322,6 +325,20 @@ class SkeletonEngine:
             if output and 'choices' in output and len(output['choices']) > 0:
                 result = output['choices'][0]['text'].strip()
                 logger.debug(f"Generated {len(result)} characters")
+                
+                # Store in memory if enabled
+                if store_memory and self._memory_manager:
+                    try:
+                        self._current_task_id = self._memory_manager.store_task(
+                            goal=f"Generation task",
+                            steps=f"Prompt: {sanitized_prompt[:100]}...",
+                            result=result[:500] if result else "Empty response",
+                            success=bool(result),
+                        )
+                        logger.debug(f"Stored generation in memory (task_id: {self._current_task_id})")
+                    except Exception as e:
+                        logger.warning(f"Failed to store generation in memory: {e}")
+                
                 return result
             else:
                 logger.warning("Model returned empty output")
@@ -401,13 +418,14 @@ class SkeletonEngine:
             logger.error(f"Streaming generation failed: {e}")
             raise EngineError(f"Streaming generation failed: {e}") from e
     
-    def chat(self, message: str, system_prompt: Optional[str] = None) -> str:
+    def chat(self, message: str, system_prompt: Optional[str] = None, store_memory: bool = True) -> str:
         """
         Handle a chat message with proper Mistral formatting.
         
         Args:
             message: User message.
             system_prompt: Optional system instruction. If None, uses personality-based default.
+            store_memory: Whether to store this interaction in memory (default: True).
             
         Returns:
             Model response.
@@ -441,7 +459,32 @@ class SkeletonEngine:
         formatted_prompt = f"[INST] {sanitized_system}\n\n{sanitized_message} [/INST]"
         
         logger.info(f"Chat request with message length: {len(sanitized_message)}")
-        return self.generate(formatted_prompt)
+        
+        # Generate response
+        response = self.generate(formatted_prompt)
+        
+        # Store interaction in memory if enabled
+        if store_memory and self._memory_manager:
+            try:
+                # Store as episodic memory
+                self._current_task_id = self._memory_manager.store_task(
+                    goal=f"Chat interaction: {sanitized_message[:100]}",
+                    steps="User sent message → System processed → Generated response",
+                    result=response[:500] if response else "Empty response",
+                    success=bool(response),
+                )
+                
+                # Auto-generate reflection for learning
+                self._memory_manager.store_reflection(
+                    task_id=self._current_task_id,
+                    insight=f"Responded to: {sanitized_message[:50]}...",
+                    rule=None  # Let the system auto-generate basic rules
+                )
+                logger.debug(f"Stored chat interaction in memory (task_id: {self._current_task_id})")
+            except Exception as e:
+                logger.warning(f"Failed to store chat in memory: {e}")
+        
+        return response
     
     def unload_model(self) -> None:
         """Unload the model from memory and perform cleanup."""
