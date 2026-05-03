@@ -5,6 +5,11 @@ Windows-focused implementation.
 
 Note: This engine is NOT thread-safe. Use separate instances per thread
 or implement external synchronization for multi-threaded access.
+
+Memory Integration:
+    The engine supports optional integration with the MemoryManager for
+    persistent learning and rule-based behavior enhancement. Pass a
+    MemoryManager instance during initialization to enable memory features.
 """
 
 import sys
@@ -45,7 +50,7 @@ class SkeletonEngine:
     # Maximum prompt length to prevent injection attacks
     MAX_PROMPT_LENGTH: int = 16384
     
-    def __init__(self, config_loader: Optional[ConfigLoader] = None, config_path: str = "config/settings.ini"):
+    def __init__(self, config_loader: Optional[ConfigLoader] = None, config_path: str = "config/settings.ini", memory_manager=None):
         """
         Initialize engine instance.
         
@@ -54,12 +59,15 @@ class SkeletonEngine:
                           If not provided, will be created from config_path.
             config_path: Path to configuration file (relative or absolute).
                         Only used if config_loader is not provided.
+            memory_manager: Optional MemoryManager instance for persistent memory.
+                           If provided, enables learning from past tasks.
         """
         self._config_path = Path(config_path)
         self._config_loader: Optional[ConfigLoader] = config_loader
         self._model: Optional[Llama] = None
         self._is_initialized = False
         self._is_model_loaded = False
+        self._memory_manager = memory_manager
         
         # Windows-specific: Default stop tokens for common models
         self._default_stop_tokens: List[str] = self.DEFAULT_STOP_TOKENS.copy()
@@ -413,6 +421,17 @@ class SkeletonEngine:
                 system_prompt = self._config_loader.personality_description
             else:
                 system_prompt = "You are Skeleton, a helpful AI assistant."
+        
+        # Inject learned rules into system prompt if memory is available
+        if self._memory_manager:
+            try:
+                rules = self._memory_manager.get_rules(context=message, limit=5)
+                if rules:
+                    rules_text = "\n\nLearned Rules:\n" + "\n".join(f"- {rule}" for rule in rules)
+                    system_prompt += rules_text
+                    logger.debug(f"Injected {len(rules)} learned rules into system prompt")
+            except Exception as e:
+                logger.warning(f"Failed to retrieve rules from memory: {e}")
         
         # Sanitize both system prompt and message
         sanitized_message = self._sanitize_prompt(message)
