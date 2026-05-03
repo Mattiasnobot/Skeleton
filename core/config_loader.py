@@ -67,6 +67,28 @@ class ConfigLoader:
             'top_k': get_int('top_k', 40, min_val=1),
             'platform': sys.platform,
         }
+        
+        # Load personality section if available
+        if 'personality' in config:
+            personality = config['personality']
+            self._settings['personality'] = {
+                'purpose': personality.get('purpose', 'To provide helpful assistance'),
+                'goal': personality.get('goal', 'Help users accomplish their tasks'),
+                'tone': personality.get('tone', 'Friendly and professional'),
+                'traits': personality.get('traits', 'Helpful, honest, harmless'),
+                'style': personality.get('style', 'Clear and concise communication'),
+                'quirks': personality.get('quirks', 'None'),
+            }
+        else:
+            # Default personality if not specified
+            self._settings['personality'] = {
+                'purpose': 'To provide helpful assistance',
+                'goal': 'Help users accomplish their tasks',
+                'tone': 'Friendly and professional',
+                'traits': 'Helpful, honest, harmless',
+                'style': 'Clear and concise communication',
+                'quirks': 'None',
+            }
 
     def _validate(self) -> None:
         """Validate loaded settings."""
@@ -108,6 +130,28 @@ class ConfigLoader:
     @property
     def platform(self) -> str:
         return self._settings['platform']
+    
+    @property
+    def personality(self) -> dict[str, str]:
+        """Get personality configuration."""
+        return self._settings.get('personality', {})
+    
+    @property
+    def personality_description(self) -> str:
+        """Get formatted personality description for system prompts."""
+        p = self.personality
+        if not p:
+            return "You are a helpful AI assistant."
+        
+        return (
+            f"You are {self.name}, an AI with the following characteristics:\n"
+            f"- Purpose: {p.get('purpose', 'To be helpful')}\n"
+            f"- Goal: {p.get('goal', 'Help users')}\n"
+            f"- Tone: {p.get('tone', 'Friendly and professional')}\n"
+            f"- Traits: {p.get('traits', 'Helpful and honest')}\n"
+            f"- Communication Style: {p.get('style', 'Clear and concise')}\n"
+            f"- Special Quirks: {p.get('quirks', 'None')}"
+        )
     
     def to_dict(self) -> dict[str, Any]:
         """Return settings as dictionary."""

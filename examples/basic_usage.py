@@ -23,7 +23,17 @@ logger = logging.getLogger(__name__)
 def run_chat(engine: SkeletonEngine):
     """Run interactive chat loop."""
     logger.info(f"{engine.name} v{engine.version} ready. Type 'quit' to exit.")
-    print(f"\n[{engine.name} v{engine.version}] Ready! Type 'quit' to exit.\n")
+    
+    # Show personality info at startup
+    if engine._config_loader and hasattr(engine._config_loader, 'personality'):
+        p = engine._config_loader.personality
+        print(f"\n🦴 {engine.name} v{engine.version} - Personality Active")
+        print(f"   Purpose: {p.get('purpose', 'To be helpful')[:70]}...")
+        print(f"   Tone: {p.get('tone', 'Friendly')}")
+        print(f"   Quirks: {p.get('quirks', 'None')}")
+        print(f"\n   Type 'quit' to exit\n")
+    else:
+        print(f"\n[{engine.name} v{engine.version}] Ready! Type 'quit' to exit.\n")
     
     while True:
         try:

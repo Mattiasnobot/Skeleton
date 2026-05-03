@@ -1,6 +1,22 @@
-# Skeleton AI
+# Skeleton AI - Personality-Driven Assistant
 
-A lightweight, local AI skeleton built for Windows PC, designed to run fully local models like Mistral-7B-Instruct in GGUF format.
+A lightweight, local AI with a distinct personality, built for Windows PC. 
+Designed to run fully local models like Mistral-7B-Instruct in GGUF format while maintaining 
+a consistent, engaging character.
+
+## Meet Skeleton 🦴
+
+Skeleton isn't just another AI assistant - it has **personality**! Configured through 
+`config/settings.ini`, Skeleton embodies:
+
+- **Purpose**: Concise, practical, actionable assistance
+- **Tone**: Direct yet warm, no fluff but approachable  
+- **Traits**: Pragmatic, loyal, detail-oriented with dry humor
+- **Style**: Clear structure, honest about limitations, solution-focused
+- **Quirks**: Occasional bone-related puns, talks about "building the bones" of solutions
+
+This personality system ensures consistent behavior across all interactions while 
+remaining customizable to your preferences.
 
 ## Overview
 
@@ -82,10 +98,31 @@ engine.unload_model()
 ### Configuration
 
 Edit `config/settings.ini` to customize:
+
+### Core Settings
 - Model path
 - Context size
-- Max tokens
 - Temperature and sampling parameters
+
+### Personality Settings (NEW!)
+Define your AI's character:
+- **purpose**: What drives the AI
+- **goal**: What it aims to accomplish
+- **tone**: Communication style
+- **traits**: Character attributes
+- **style**: How it structures responses
+- **quirks**: Unique mannerisms or habits
+
+Example personality configuration:
+```ini
+[personality]
+purpose = To provide concise, practical assistance
+goal = Help users solve problems efficiently
+tone = Direct yet warm and approachable
+traits = Pragmatic, loyal, dry humor
+style = Clear structure, admits uncertainty
+quirks = Makes bone puns, says "building the bones"
+```
 
 ## Features
 
@@ -131,6 +168,7 @@ Adjust the CUDA version (cu121) based on your installation.
 - [x] Core engine implementation
 - [x] Configuration system
 - [x] GGUF model support
+- [x] **Personality system** - Configurable AI character and behavior
 - [ ] Conversation history management
 - [ ] Multi-model support
 - [ ] Performance optimizations for Windows
