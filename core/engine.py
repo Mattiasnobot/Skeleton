@@ -399,7 +399,7 @@ class SkeletonEngine:
         
         Args:
             message: User message.
-            system_prompt: Optional system instruction.
+            system_prompt: Optional system instruction. If None, uses personality-based default.
             
         Returns:
             Model response.
@@ -408,7 +408,11 @@ class SkeletonEngine:
             EngineError: If generation fails.
         """
         if system_prompt is None:
-            system_prompt = "You are Skeleton, a helpful AI assistant."
+            # Use personality-driven system prompt from config
+            if self._config_loader and hasattr(self._config_loader, 'personality_description'):
+                system_prompt = self._config_loader.personality_description
+            else:
+                system_prompt = "You are Skeleton, a helpful AI assistant."
         
         # Sanitize both system prompt and message
         sanitized_message = self._sanitize_prompt(message)
